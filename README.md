@@ -30,8 +30,8 @@ the download. See [Apple’s instructions](https://support.apple.com/en-us/10244
 
 ## Compatibility
 
-- **v1.0 is Intel (`x86_64`) only**, with macOS 15 or later required by the app bundle.
-- Tested on macOS 15.7.4 with an Intel Mac and Radeon Pro 5500M. Short tests reached
+- **v1.0** with macOS 15 or later required by the app bundle.
+- Tested on macOS 15 with an Intel Mac and dedicated GPU. Short tests reached
   a Quick Race at about 30 FPS with 2× render scale, working audio, and profile save/load.
 - **Apple Silicon is untested.** This build requires Rosetta there; it is not a
   native ARM or Universal app, and performance or graphics compatibility is not promised.
