@@ -1878,7 +1878,7 @@ static void mouse_frame()
 // the name is typed on the keyboard; with a gamepad the game's letter grid opens, as on the PS2, and any pad works it for either player.
 // The names live in Fred (0x2fc050): at +0x10d90, 1744 bytes on for player 2. tKeyboard's limit stays: 7 characters, which the race's HUD has room for.
 static const u32 NAME_ROW_1 = 0x52e039f3, NAME_RED = 0x71450a81, NAME_BLUE = 0x71572302;
-static const int NAME_BLURB = 356, NAME_MAX = 7;
+static const int NAME_BLURB = 356, PROFILE_NAME_MAX = 7;
 static const u32 kFredNames = 0x2fc050 + 0x10d90;
 static bool g_name_typing;
 static int g_name_player;

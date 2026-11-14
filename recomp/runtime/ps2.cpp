@@ -568,7 +568,11 @@ void ee_check_report(int kind, uint32_t a, uint32_t b, uint32_t fast, uint32_t m
 
 void hot_math_selftest();
 
+#ifdef __APPLE__
+int hp2_game_main()
+#else
 int main()
+#endif
 {
     mem_reserve();
     // the first start, or the game installed beside this exe: the game runs from its own folder

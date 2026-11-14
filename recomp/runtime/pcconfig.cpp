@@ -1,3 +1,4 @@
+#include "platform_compat.h"
 // hp2.ini: the port's settings (pcconfig.h).
 #include "pcconfig.h"
 
@@ -152,7 +153,6 @@ const char *pc_button_action(int b) { return b >= 0 && b < PCB_COUNT ? kActions[
 std::string pc_key_name(int vk)
 {
     if (!vk) return "-";
-#ifdef _WIN32
     static const struct { int vk; const char *name; } special[] = {
         {0x08, "Backspace"}, {0x09, "Tab"}, {0x0D, "Enter"}, {0x10, "Shift"}, {0x11, "Ctrl"}, {0x12, "Alt"},
         {0x14, "Caps Lock"}, {0x1B, "Esc"}, {0x20, "Space"}, {0x21, "Page Up"}, {0x22, "Page Down"},
@@ -163,6 +163,8 @@ std::string pc_key_name(int vk)
         if (s.vk == vk) return s.name;
     if (vk >= 0x60 && vk <= 0x69) return "Num " + std::to_string(vk - 0x60);
     if (vk >= 0x70 && vk <= 0x87) return "F" + std::to_string(vk - 0x6F);
+    if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) return std::string(1, (char)vk);
+#ifdef _WIN32
     char name[64] = {};
     UINT sc = MapVirtualKeyA((UINT)vk, MAPVK_VK_TO_VSC);
     if (sc && GetKeyNameTextA((LONG)(sc << 16), name, sizeof name) > 0) return name;
@@ -282,7 +284,11 @@ void pc_config_save()
     fprintf(f, "; Environment variables (HP2_NOSOUND ...) win over this file.\n\n");
     fprintf(f, "[video]\n");
     fprintf(f, "scale=%d            ; the picture, times the PS2's: 1 to 8\n", g_cfg.scale);
+#ifdef __APPLE__
+    fprintf(f, "fullscreen=%d       ; 1 = fullscreen (Command+F or Option+Enter)\n", g_cfg.fullscreen);
+#else
     fprintf(f, "fullscreen=%d       ; 1 = borderless fullscreen (Alt+Enter)\n", g_cfg.fullscreen);
+#endif
     fprintf(f, "window=%d,%d     ; the window's picture\n", g_cfg.win_w, g_cfg.win_h);
     fprintf(f, "smooth=%d           ; 1 = smooth picture scaling, 0 = sharp\n", g_cfg.smooth);
     fprintf(f, "aspect=%d           ; the race's picture: 0 = 4:3, 1 = 16:10, 2 = 16:9\n", g_cfg.aspect);
@@ -301,7 +307,11 @@ void pc_config_save()
     fprintf(f, "max_detail=%d       ; 1 = every object at its most detailed model, 0 = the PS2's levels of detail\n", g_cfg.max_detail);
     fprintf(f, "reflections=%d      ; the cars' reflections: 0 = the PS2's, 1 = advanced (new every frame), 2 = high (new every frame, twice the resolution)\n", g_cfg.reflections);
     fprintf(f, "\n");
+#ifdef __APPLE__
+    fprintf(f, "log=%s             ; on = the Mac app writes speed.log, retaining the previous run in speed_prev.log\n", g_cfg.log ? "on" : "off");
+#else
     fprintf(f, "log=%s             ; on = the game writes speed.log (4 MB at most: its first and its last 2 MB), off = it writes no log at all\n", g_cfg.log ? "on" : "off");
+#endif
     fprintf(f, "[audio]\nvolume=%d           ; percent\n\n", g_cfg.volume);
     write_controls(f);
     fclose(f);

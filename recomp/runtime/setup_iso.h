@@ -1,4 +1,5 @@
 #pragma once
+#include "platform_compat.h"
 // What the first start reads a disc image with (setup.cpp, install.cpp) and what loads the game's program (ps2.cpp): SHA-1, the CRC-32 of zlib,
 // ISO 9660 without mounting.
 #include <cstdint>
@@ -102,7 +103,6 @@ inline uint32_t crc32_update(uint32_t crc, const void *p, size_t n)
     return ~crc;
 }
 
-#ifdef _WIN32
 // ISO 9660, its files by path; 2048-byte sectors
 struct Iso {
     static const uint32_t SECTOR = 2048;
@@ -219,4 +219,3 @@ struct Iso {
         return find(("/" + name).c_str());
     }
 };
-#endif

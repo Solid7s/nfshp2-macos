@@ -1,3 +1,4 @@
+#include "platform_compat.h"
 // The renderer, the Vulkan side: a picture of its own, blitted to the window through a swapchain (native.h). The picture's size has
 // nothing to do with the GS's: clip space is resolution-free.
 #include "native.h"
@@ -27,6 +28,12 @@ extern FILE *g_hle_log;
 #include <dlfcn.h>
 #endif
 #include <vulkan/vulkan.h>
+#ifdef __APPLE__
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+bool window_vulkan_surface(VkInstance, VkSurfaceKHR *);
+void window_drawable_size(int &, int &);
+#endif
 
 static const uint32_t kVert[] =
 #include "native.vert.spv.h"
@@ -683,7 +690,9 @@ static bool setup_resources();
 
 static bool setup()
 {
-#ifdef _WIN32
+#ifdef __APPLE__
+    gipa = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr());
+#elif defined(_WIN32)
     HMODULE lib = LoadLibraryA("vulkan-1.dll");
     if (!lib) return false;
     gipa = (PFN_vkGetInstanceProcAddr)(void *)GetProcAddress(lib, "vkGetInstanceProcAddr");
@@ -700,28 +709,47 @@ static bool setup()
     VkInstanceCreateInfo ci = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     ci.pApplicationInfo = &app;
     // VK_KHR_get_surface_capabilities2 where the loader has it: what VK_EXT_full_screen_exclusive asks for (make_swapchain)
-    bool caps2 = false;
+    bool caps2 = false, portability = false;
     if (auto list = (PFN_vkEnumerateInstanceExtensionProperties)gipa(nullptr, "vkEnumerateInstanceExtensionProperties")) {
         uint32_t en = 0;
         list(nullptr, &en, nullptr);
         std::vector<VkExtensionProperties> ext(en);
         if (en) list(nullptr, &en, ext.data());
-        for (uint32_t i = 0; i < en; i++)
+        for (uint32_t i = 0; i < en; i++) {
             if (!strcmp(ext[i].extensionName, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME)) caps2 = true;
+            if (!strcmp(ext[i].extensionName, "VK_KHR_portability_enumeration")) portability = true;
+        }
     }
+#ifdef __APPLE__
+    Uint32 count = 0;
+    const char *const *required = SDL_Vulkan_GetInstanceExtensions(&count);
+    if (!required) return false;
+    std::vector<const char *> instance_extensions(required, required + count);
+    if (portability) {
+        instance_extensions.push_back("VK_KHR_portability_enumeration");
+        ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    }
+    ci.enabledExtensionCount = (uint32_t)instance_extensions.size();
+    ci.ppEnabledExtensionNames = instance_extensions.data();
+#else
     const char *instance_extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME};
     ci.enabledExtensionCount = caps2 ? 3 : 2;
     ci.ppEnabledExtensionNames = instance_extensions;
+#endif
     VkInstance inst;
     if (!vkCreateInstance || vkCreateInstance(&ci, nullptr, &inst)) return false;
     g.instance = inst;
 #define NV_LOAD_I(name) name = (PFN_##name)gipa(inst, #name);
     NV_INSTANCE(NV_LOAD_I)
+#ifdef __APPLE__
+    if (!window_vulkan_surface(inst, &g.surface)) return false;
+#else
     auto make_surface = (PFN_vkCreateWin32SurfaceKHR)gipa(inst, "vkCreateWin32SurfaceKHR");
     VkWin32SurfaceCreateInfoKHR surf = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
     surf.hinstance = GetModuleHandleA(nullptr);
     surf.hwnd = (HWND)window_handle();
     if (!surf.hwnd || !make_surface || make_surface(inst, &surf, nullptr, &g.surface)) return false;
+#endif
     // The GPU: the first that can show on the window, the discrete ones before the others. One that cannot (a second card with no screen of
     // its own, on some systems) is passed over, not taken and then given up on.
     uint32_t n = 8;
@@ -746,14 +774,18 @@ static bool setup()
     if (!phys) return false;
     g.phys = phys;
     vkGetPhysicalDeviceMemoryProperties(phys, &g.mem);
-    bool exclusive_ext = false;
+    bool exclusive_ext = false, portability_subset = false;
     {
         uint32_t en = 0;
         vkEnumerateDeviceExtensionProperties(phys, nullptr, &en, nullptr);
         std::vector<VkExtensionProperties> ext(en);
         if (en) vkEnumerateDeviceExtensionProperties(phys, nullptr, &en, ext.data());
-        for (uint32_t i = 0; i < en; i++)
+        for (uint32_t i = 0; i < en; i++) {
+#ifdef _WIN32
             if (!strcmp(ext[i].extensionName, VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME)) exclusive_ext = true;
+#endif
+            if (!strcmp(ext[i].extensionName, "VK_KHR_portability_subset")) portability_subset = true;
+        }
     }
     g.no_exclusive = caps2 && exclusive_ext && !getenv("HP2_EXCLUSIVE");    // HP2_EXCLUSIVE: the driver's own choice, as before, for comparing
     float prio = 1;
@@ -774,9 +806,13 @@ static bool setup()
     g.depth_clamp = want.depthClamp;
     vkGetPhysicalDeviceProperties(phys, &g.props);
     di.pEnabledFeatures = &want;
-    const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME};
-    di.enabledExtensionCount = g.no_exclusive ? 2 : 1;
-    di.ppEnabledExtensionNames = device_extensions;
+    std::vector<const char *> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+#ifdef _WIN32
+    if (g.no_exclusive) device_extensions.push_back(VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME);
+#endif
+    if (portability_subset) device_extensions.push_back("VK_KHR_portability_subset");
+    di.enabledExtensionCount = (uint32_t)device_extensions.size();
+    di.ppEnabledExtensionNames = device_extensions.data();
     if (vkCreateDevice(phys, &di, nullptr, &g.dev)) return false;
     // who draws, for a report of a picture that is wrong on one kind of card
     fprintf(g_hle_log, "native: %s, vendor %04x, driver %u.%u.%u (%08x), Vulkan %u.%u.%u; the screen %s\n", g.props.deviceName, g.props.vendorID,
@@ -2103,6 +2139,9 @@ static void make_swapchain(int w, int h)
         drop();
         vkDestroySurfaceKHR(g.instance, g.surface, nullptr);
         g.surface = VK_NULL_HANDLE;
+#ifdef __APPLE__
+        if (!window_vulkan_surface(g.instance, &g.surface)) return;
+#else
         auto make_surface = (PFN_vkCreateWin32SurfaceKHR)gipa(g.instance, "vkCreateWin32SurfaceKHR");
         VkWin32SurfaceCreateInfoKHR surf = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
         surf.hinstance = GetModuleHandleA(nullptr);
@@ -2111,6 +2150,7 @@ static void make_swapchain(int w, int h)
             g.surface = VK_NULL_HANDLE;
             return;                             // lost still: the next try makes it
         }
+#endif
         g.surface_lost = false;
         VkBool32 shows = VK_FALSE;              // the spec's: asked of a surface before a swapchain is made on it
         vkGetPhysicalDeviceSurfaceSupportKHR(g.phys, g.family, g.surface, &shows);
@@ -2155,9 +2195,11 @@ static void make_swapchain(int w, int h)
         }
     }
     VkSwapchainCreateInfoKHR ci = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+#ifdef _WIN32
     VkSurfaceFullScreenExclusiveInfoEXT exclusive = {VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT};
     exclusive.fullScreenExclusive = VK_FULL_SCREEN_EXCLUSIVE_DISALLOWED_EXT;
     if (g.no_exclusive) ci.pNext = &exclusive;
+#endif
     ci.surface = g.surface;
     ci.minImageCount = caps.minImageCount + 1;
     if (caps.maxImageCount && ci.minImageCount > caps.maxImageCount) ci.minImageCount = caps.maxImageCount;
@@ -2845,9 +2887,14 @@ static bool draw_frame(const NativeFrame &frame, bool &uploaded)
         vkCmdCopyImageToBuffer(g.cmd, g.color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, g.readback, 1, &copy);
     }
     // the window: its size, then an image if one is free (a frame that finds none is simply not shown)
+#ifdef __APPLE__
+    int cw = 0, ch = 0;
+    window_drawable_size(cw, ch);
+#else
     RECT client = {};
     GetClientRect((HWND)window_handle(), &client);
     int cw = client.right, ch = client.bottom;
+#endif
     bool on_screen = false;
     uint32_t image = 0;
     // what the driver said of the swapchain, by acquire or present: out of date (or lost) and it is made again; suboptimal and its size is

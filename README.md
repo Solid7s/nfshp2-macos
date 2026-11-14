@@ -1,30 +1,95 @@
-# Need for Speed: Hot Pursuit 2 — Windows port
+# Need for Speed: Hot Pursuit 2 — macOS port
 
-A static recompilation of the PlayStation 2 game for Windows: the game's own code, translated to C++, on a native Vulkan
-renderer, with PC controls, menus, profiles and settings. Ported by ZloiKILLER.
+An unofficial macOS adaptation of [ZloiKILLER’s Windows static recompilation](https://github.com/ZloiKILLER/nfshp2-port-win)
+of the **PlayStation 2** game. Maintained by [Solid7s](https://github.com/Solid7s).
+The game runs through a native macOS window and audio backend, using Vulkan through MoltenVK for graphics.
 
-**The game is not included.** You need your own copy, a disc image (`.iso`) or the disc itself in a DVD drive, of one of these releases:
+**You must provide your own game files.** No ISO, extracted game data, or saves are
+included in this repository or the app download. Supply a supported PS2 disc image
+(`.iso`) from your own copy, or a game folder already imported by this port or the
+upstream Windows port. The Windows PC, Xbox, and GameCube editions are not supported.
 
-- USA, SLUS-20362
-- Europe v1.00 and v2.00, SLES-50731
-- Asia, SLPM-65181
-- Korea, SLPM-67527
+## Download and play
 
-## Playing
+1. Download **`nfshp2-macos-v1.0-intel.zip`** from [Releases](https://github.com/Solid7s/nfshp2-macos/releases/tag/v1.0).
+   The automatically generated “Source code” archives are for building, not playing.
+2. Unzip it and move **Need for Speed Hot Pursuit 2.app** to Applications or another folder of your choice.
+3. Open the app. On first launch, choose **Choose ISO…** to import your disc image,
+   or **Use Existing Folder…** to select an imported game folder containing `data/`.
+4. Wait for the import to finish. Progress and cancellation are available, and the
+   game starts automatically. Future launches remember the installation.
 
-1. Download `speed.exe` from [Releases](https://github.com/ZloiKILLER/nfshp2-port-win/releases).
-2. Start it and choose **Install**. It asks for your disc image (Browse) or takes the disc from a DVD drive (From drive), and for the folder
-   to install into (any folder you like), checks the disc, and puts everything the game needs there (about 3.6 GB; the disc is only read).
-   Then the game starts.
-3. From then on start `speed.exe` in that folder (or the shortcut on the desktop).
+The app includes its runtime dependencies; no Terminal, Homebrew, compiler, or PS2
+BIOS is needed to use the download. Allow about **4 GB** of disk space for an import.
+The ISO is read without mounting or modifying it and is not needed after import.
 
-To update, download the new `speed.exe`, start it and choose **Update**: it asks for the folder the game is installed in and replaces the
-program and the port's own files there. Settings, saves, replays and `data\replace` stay as they are, and no disc is needed.
+This release is ad hoc signed, **not Apple-notarized**. If macOS blocks the app
+because it cannot verify its developer, first attempt to open it, then use
+**System Settings → Privacy & Security → Open Anyway** for this app if you trust
+the download. See [Apple’s instructions](https://support.apple.com/en-us/102445).
 
-`README.txt` in the game's folder has the settings and what is in the folder. The controls are in the game: Options > Controls.
+## Compatibility
 
-Needs: Windows 10 or 11, 64-bit, a graphics card with Vulkan.
+- **v1.0 is Intel (`x86_64`) only**, with macOS 15 or later required by the app bundle.
+- Tested on macOS 15.7.4 with an Intel Mac and Radeon Pro 5500M. Short tests reached
+  a Quick Race at about 30 FPS with 2× render scale, working audio, and profile save/load.
+- **Apple Silicon is untested.** This build requires Rosetta there; it is not a
+  native ARM or Universal app, and performance or graphics compatibility is not promised.
+- Full race completion, long sessions, every track/mode, and physical controllers
+  have not been comprehensively tested. This is the first macOS release, with limited hardware coverage.
 
-How to build it, how the repository is laid out and whose work it uses: [TECHNICAL.md](TECHNICAL.md).
+The importer recognizes these upstream-supported PS2 releases:
 
-Need for Speed and Hot Pursuit are trademarks of Electronic Arts. This project is not affiliated with Electronic Arts.
+| Disc | Serial | macOS testing |
+| --- | --- | --- |
+| USA | SLUS-20362 | Imported and played |
+| Europe v1.00 / v2.00 | SLES-50731 | Not tested |
+| Asia | SLPM-65181 | Not tested |
+| Korea | SLPM-67527 | Not tested |
+
+## Settings and saves
+
+New imports are stored outside the app:
+
+```text
+~/Library/Application Support/Need for Speed Hot Pursuit 2/Game/
+```
+
+Within that folder, `hp2.ini` holds settings, `saves/` holds player profiles, and
+`speed.log` holds diagnostics. If you choose an existing installation, its files
+and saves stay in that location. Replacing the `.app` does not replace your saves.
+If you move the game folder, the app asks you to select it again.
+
+Open **Options → Graphics** for resolution, 1×–8× render scale, aspect ratio,
+30/60 FPS, VSync, draw distance, reflections, model detail, antialiasing, texture
+filtering, and color adjustments. Settings save automatically. **Options → Controls**
+contains keyboard and gamepad bindings.
+
+Default keyboard controls: arrows and Enter in menus; Up accelerates, Down brakes,
+Left/Right steer, Space is the handbrake, C changes camera, and Esc pauses or goes back.
+**Command+F** or **Option+Enter** toggles fullscreen.
+
+## Building and development
+
+See [MACOS.md](MACOS.md) for macOS dependencies, import/build commands, architecture,
+and validation details. The source checkout does not include the generated game
+C++; building the playable executable also requires your own supported game files.
+See [TECHNICAL.md](TECHNICAL.md) for the upstream runtime and recompiler, and
+[README-WINDOWS.md](README-WINDOWS.md) for the original Windows instructions.
+
+## Credits and rights
+
+- **Electronic Arts and the original development team** — Need for Speed: Hot Pursuit 2.
+- **ZloiKILLER** — the original static recompilation, Windows port, renderer, and runtime on which this work is based.
+- **Solid7s** — macOS adaptation, app packaging, first-run import, and Mac input fixes.
+- **SDL, MoltenVK, SPIRV-Cross, SMAA, and Silent** — libraries and contributions detailed in [CREDITS.md](CREDITS.md).
+
+Need for Speed and Hot Pursuit are trademarks of Electronic Arts. The original
+game and its content remain the property of Electronic Arts and their respective
+copyright holders; music, vehicles, logos, and other licensed material retain
+their respective owners’ rights. This is an unofficial fan project, not affiliated
+with, endorsed by, or sponsored by Electronic Arts or any other rights holder.
+Providing this port does not grant rights to the original game or its assets.
+
+See [CREDITS.md](CREDITS.md) and [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)
+for attribution and bundled library licenses.

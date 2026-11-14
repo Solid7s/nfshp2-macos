@@ -1,15 +1,19 @@
+#include "platform_compat.h"
 // What the player sees of the PS2, as a PC game has it (recomp/docs/frontend-menus.md):
 //  - the strings: FE_ENGLISH's table is patched as it loads, so every reader gets the new text;
 //  - the button icons: BUTTONSOUT's sheet is repainted with the keys or gamepad buttons bound,
 //    in the game's own FONT_A, whenever the bindings or the device in use change.
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
 #include "pclang.h"
 #include "pcmenu.h"
 #include "hw.h"
 #include "pcconfig.h"
 
 #include <atomic>
+#include <thread>
 #include <cmath>
 #include <cstring>
 #include <functional>
@@ -750,6 +754,7 @@ void HOOK_ChangeState__15RaceCoordinator7RCState(Ctx &c, void (*orig)(Ctx &))
     // TEMP (HP2_DIAG): the game thread's cycles over a replay, the measure of its work that the clock's speed and the waits do not change
     ULONG64 &cycles_at = g_replay_cycles_at;
     static u32 rc_state = 0;
+#ifdef _WIN32
     if (diag_on() && (rc_state == 9 || rc_state == 4 || rc_state == 5) && state != rc_state) {
         ULONG64 now = 0;
         QueryThreadCycleTime(GetCurrentThread(), &now);
@@ -760,15 +765,17 @@ void HOOK_ChangeState__15RaceCoordinator7RCState(Ctx &c, void (*orig)(Ctx &))
         if (quit) {
             fprintf(g_hle_log, "replay: %u steps in all, %u differ\n", g_replay_steps, g_replay_diffs);
             fflush(g_hle_log), fflush(stderr);
-            TerminateProcess(GetCurrentProcess(), 0);
+            std::exit(0);
         }
     }
+#endif
     if (state == 4 || state == 5 || state == 9) {
         g_replay_steps = g_replay_diffs = 0;                // a replay starts
         g_replay_left_told = false;
         // HP2_QUIETCORE=<logical processor, an even one>: for measuring on a machine that does other work. The game's thread stays
         // on that processor above the others' priority, and a thread of ours that only pauses holds the processor's other half
         // (the next one), so nobody else's work shares the core; what a pausing neighbour costs is the same in every run.
+#ifdef _WIN32
         static const char *quiet = getenv("HP2_QUIETCORE");
         static bool quiet_set;
         if (quiet && !quiet_set) {
@@ -785,6 +792,7 @@ void HOOK_ChangeState__15RaceCoordinator7RCState(Ctx &c, void (*orig)(Ctx &))
             fprintf(g_hle_log, "replay: the game's thread on processor %d, its other half held\n", cpu);
         }
         QueryThreadCycleTime(GetCurrentThread(), &cycles_at);
+#endif
     }
     rc_state = state;
     if (diag_on()) fprintf(g_hle_log, "rc: ChangeState %u (ra %08x)\n", c.r[5].w[0], c.r[31].w[0]), fflush(g_hle_log);
@@ -810,6 +818,7 @@ void HOOK_GetData__13ReplayManagerii(Ctx &c, void (*orig)(Ctx &))
 
 // TEMP: HP2_WATCH=<timer>,<hex address>: from the replay step of that timer on, every write to that word of the game's memory and the
 // code that made it (a debug register of the game's thread; the place as an offset into speed.exe, for speed.map)
+#ifdef _WIN32
 static u32 g_watch_addr, g_watch_timer;
 static LONG CALLBACK watch_hit(EXCEPTION_POINTERS *e)
 {
@@ -848,6 +857,10 @@ static void watch_step(u32 timer)
     CloseHandle(helper), CloseHandle(me);
     fprintf(stderr, "watch: armed on %08x at timer %u\n", g_watch_addr, timer);
 }
+
+#else
+static void watch_step(u32) {}
+#endif
 
 void HOOK_VerifyDebugChecksums__5World(Ctx &c, void (*orig)(Ctx &))
 {
@@ -916,8 +929,9 @@ void HOOK_VerifyDebugChecksums__5World(Ctx &c, void (*orig)(Ctx &))
         }
         if (g_replay_steps % 64 == 0) fflush(chk);
         static const u32 quit_at = getenv("HP2_REPLAYQUIT") ? (u32)strtoul(getenv("HP2_REPLAYQUIT"), nullptr, 10) : 0;   // TEMP: the run ends there
-        if (quit_at && LW(gp - 0x4c78) == quit_at) fflush(chk), fflush(stderr), TerminateProcess(GetCurrentProcess(), 0);
+        if (quit_at && LW(gp - 0x4c78) == quit_at) fflush(chk), fflush(stderr), std::exit(0);
     }
+#ifdef _WIN32
     if (g_replay_steps == 1500 && diag_on()) {             // TEMP: the work of a replay's first 1500 steps, in the game thread's cycles
         extern ULONG64 g_replay_cycles_at;
         ULONG64 now = 0;
@@ -925,6 +939,7 @@ void HOOK_VerifyDebugChecksums__5World(Ctx &c, void (*orig)(Ctx &))
         fprintf(g_hle_log, "replay: 1500 steps took %.1f million cycles of the game's thread\n", (now - g_replay_cycles_at) / 1e6);
         fflush(g_hle_log);
     }
+#endif
     static ULONGLONG began;                                // when the replay's first step was
     if (g_replay_steps == 1) began = GetTickCount64();
     // TEMP: HP2_SHOTSTEPS=<step>[,<step>...]: the renderer's picture (HP2_NATIVESHOT, as F11 takes it, two frames on) at those steps of a replay
@@ -982,7 +997,7 @@ void HOOK_bGetTickerDifference__FUiUi(Ctx &c, void (*orig)(Ctx &))
     static const bool spin = getenv("HP2_SPINWAIT") != nullptr;
     if (g_in_gettimestep && !spin && !nowait) {
         const float left = c.f[20].f - c.f[0].f * c.f[22].f;
-        if (left > 0.0025f && left < 1.0f) Sleep(1);
+        if (left > 0.0025f && left < 1.0f) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 #ifdef EE_COUNT

@@ -4,6 +4,7 @@
 // HI/LO pairs, the FPU, and VU0 in macro mode. Memory is the 32 MB main RAM
 // plus the 16 KB scratchpad; anything else goes to the I/O handlers.
 #pragma once
+#include "platform_compat.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>

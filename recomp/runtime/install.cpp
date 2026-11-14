@@ -1,3 +1,4 @@
+#include "platform_compat.h"
 // The game's folder from the disc image (install.h). The layout and the exports are those of tools/recomp/unpack_data.py, export_textures.py and
 // export_text.py, made again here so that the exe and an .iso give the same folder: the archive's files and the texts to the byte, the PNGs to the
 // pixel (their deflate is this file's, not zlib's). The textures are exported in a fixed order (the Python tool's workers raced for which file a
@@ -22,6 +23,11 @@
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
+#endif
+
+#ifndef _WIN32
+#include "port_resources.h"
+#endif
 
 namespace fs = std::filesystem;
 
@@ -81,11 +87,21 @@ bool stopped(InstallSteps &s) { return s.stop && *s.stop; }
 // a resource of the exe (speed.rc): the port's own files
 bool resource(const wchar_t *name, const uint8_t *&p, size_t &n)
 {
+#ifdef _WIN32
     HRSRC r = FindResourceW(nullptr, name, (LPCWSTR)RT_RCDATA);
     HGLOBAL g = r ? LoadResource(nullptr, r) : nullptr;
     p = g ? (const uint8_t *)LockResource(g) : nullptr;
     n = r ? SizeofResource(nullptr, r) : 0;
     return p != nullptr;
+#else
+    // CMake embeds the same resources that Windows obtains from speed.rc.
+    const std::wstring key(name);
+    for (const auto &r : hp2_resources) {
+        if (key == r.name) { p = r.data; n = r.size; return true; }
+    }
+    p = nullptr; n = 0;
+    return false;
+#endif
 }
 
 // ---- unpack_data.py ----------------------------------------------------------------------------------
@@ -767,9 +783,9 @@ bool write_port_files(const fs::path &root)
         const wchar_t *res;
         const wchar_t *path;
     } kFiles[] = {
-        {L"LANG_ENGLISH", L"data\\lang\\ENGLISH.txt"}, {L"LANG_FRENCH", L"data\\lang\\FRENCH.txt"},   {L"LANG_GERMAN", L"data\\lang\\GERMAN.txt"},
-        {L"LANG_ITALIAN", L"data\\lang\\ITALIAN.txt"}, {L"LANG_SPANISH", L"data\\lang\\SPANISH.txt"}, {L"LANG_SWEDISH", L"data\\lang\\SWEDISH.txt"},
-        {L"UI_CURSOR", L"data\\ui\\cursor.cur"},       {L"README", L"README.txt"},
+        {L"LANG_ENGLISH", L"data/lang/ENGLISH.txt"}, {L"LANG_FRENCH", L"data/lang/FRENCH.txt"},   {L"LANG_GERMAN", L"data/lang/GERMAN.txt"},
+        {L"LANG_ITALIAN", L"data/lang/ITALIAN.txt"}, {L"LANG_SPANISH", L"data/lang/SPANISH.txt"}, {L"LANG_SWEDISH", L"data/lang/SWEDISH.txt"},
+        {L"UI_CURSOR", L"data/ui/cursor.cur"},       {L"README", L"README.txt"},
     };
     for (auto &f : kFiles) {
         const uint8_t *p;
@@ -931,10 +947,3 @@ bool install_game(Iso &iso, const std::wstring &root_dir, InstallSteps &steps)
     steps.progress(1000, L"Done");
     return true;
 }
-
-#else
-bool install_port_files(const std::wstring &) { return false; }
-bool install_write_png(const std::wstring &, int, int, const std::vector<uint8_t> &) { return false; }
-bool install_game(Iso &, const std::wstring &, InstallSteps &s) { return s.why = "Windows only for now.", false; }
-bool install_exports(const std::wstring &, InstallSteps &s) { return s.why = "Windows only for now.", false; }
-#endif

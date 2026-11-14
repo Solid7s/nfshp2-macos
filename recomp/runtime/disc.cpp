@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -99,7 +100,10 @@ static bool build_archive(const std::filesystem::path &data)
 {
     namespace fs = std::filesystem;
     std::ifstream index(data / "index.txt");
-    if (!index) return false;
+    if (!index) {
+        fprintf(stderr, "disc: cannot open %s: %s\n", (data / "index.txt").string().c_str(), strerror(errno));
+        return false;
+    }
     std::string line;
     u64 sector = 0;
     std::error_code ec;

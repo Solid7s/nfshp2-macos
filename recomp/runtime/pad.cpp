@@ -2,7 +2,8 @@
 // SDL is told to listen without one having the focus; window_pad decides whether the game hears it.
 // Two slots: a pad that comes keeps its slot until it goes, so a player does not change pads.
 //
-// All of SDL runs on a thread of its own, and the game reads what that thread last saw. Finding a pad that was just plugged in and opening
+// Gamepad polling runs on a thread of its own, and the game reads what that thread last saw. On Mac the window's main thread owns
+// SDL's event queue; this worker must neither pump nor flush it. Finding a pad that was just plugged in and opening
 // it are calls into Windows and into the device that can take seconds (DirectInput's enumeration, a pad's handshake over Bluetooth, a driver
 // being installed, a pad that comes and goes): on the game's thread they stopped the game for as long, which a tester saw as the game
 // hanging when a pad was connected while it ran. Here they stop only this thread; the game sees no pad a moment longer.
@@ -69,8 +70,10 @@ void attach_virtual(int n)
 void refresh()
 {
     const Uint64 t0 = SDL_GetTicks();
+#ifndef __APPLE__
     SDL_PumpEvents();
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);   // nobody reads the queue; plugging a pad fills it
+#endif
     const Uint64 pumped = SDL_GetTicks() - t0;
     if (pumped >= 100) fprintf(stderr, "pad: looking for devices took %llu ms\n", (unsigned long long)pumped);
     for (int slot = 0; slot < 2; slot++) {

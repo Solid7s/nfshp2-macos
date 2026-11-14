@@ -4,3 +4,11 @@
 /recompwin/
 __pycache__/
 *.pyc
+
+/recompmac/
+/game/
+*.iso
+*.ISO
+/dist/
+.DS_Store
+*.app/

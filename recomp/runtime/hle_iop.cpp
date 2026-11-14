@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "disc.h"
-#include "funcs.h"
 #include "iop.h"
 #include "spu2.h"
 

@@ -2,6 +2,10 @@
 #include "host.h"
 
 #include <cstdio>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#include <filesystem>
+#endif
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -24,6 +28,13 @@ std::string host_exe_dir()
         std::string p = exe;
         return p.substr(0, p.find_last_of("\\/") + 1);
     }
+#endif
+#ifdef __APPLE__
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::vector<char> path(size);
+    if (_NSGetExecutablePath(path.data(), &size) == 0)
+        return std::filesystem::weakly_canonical(path.data()).parent_path().string() + "/";
 #endif
     return "";
 }
